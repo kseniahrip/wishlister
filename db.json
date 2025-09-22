@@ -1,0 +1,37 @@
+{
+  "users": [
+    {
+      "id": "1",
+      "username": "demo",
+      "password": "demo123",
+      "avatar": "https://ui-avatars.com/api/?name=demo&background=8b5cf6&color=fff",
+      "createdAt": "2024-01-20T10:00:00.000Z"
+    },
+    {
+      "id": "b4svyzkoe",
+      "username": "Ксюша",
+      "password": "ksusha256",
+      "avatar": "https://ui-avatars.com/api/?name=%D0%9A%D1%81%D1%8E%D1%88%D0%B0&background=8b5cf6&color=fff",
+      "createdAt": "2025-09-19T04:00:42.517Z"
+    }
+  ],
+  "wishes": [
+    {
+      "id": "1",
+      "title": "MacBook Pro",
+      "description": "Для разработки крутых приложений",
+      "image": "https://images.unsplash.com/photo-1517336714731-489689fd1ca8?w=400&h=300&fit=crop",
+      "link": "https://apple.com",
+      "userId": "1"
+    },
+    {
+      "id": "7sojku9o9",
+      "title": "Книга",
+      "description": "Книга Анна Каренина в издательстве МИФ",
+      "image": "https://ir-3.ozone.ru/s3/multimedia-1-h/wc1000/7349426873.jpg",
+      "link": "https://www.ozon.ru/product/anna-karenina-vechnye-istorii-tolstoy-lev-nikolaevich-1116935856/?_bctx=CAgQh9aMMA&at=57twEx2o9cPGkxkyCAQJ402u68ZwRwS19x1DZSp8N89O",
+      "userId": "b4svyzkoe",
+      "createdAt": "2025-09-22T23:25:49.692Z"
+    }
+  ]
+}
