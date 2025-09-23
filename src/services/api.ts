@@ -1,10 +1,10 @@
 import type { User, RegisterData, LoginData, Wish } from '@/types/auth';
 
-const API_BASE = 'https://kseniahrip.github.io/wishlister/api';
+const MOCKAPI_BASE_URL = 'https://68d1f635e6c0cbeb39a63078.mockapi.io/api';
 
 class ApiService {
   private async request(endpoint: string, options: RequestInit = {}) {
-    const url = `${API_BASE}${endpoint}`;
+    const url = `${MOCKAPI_BASE_URL}${endpoint}`;
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
