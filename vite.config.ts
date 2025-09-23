@@ -18,4 +18,9 @@ export default defineConfig({
     },
   },
   base: '/wishlister/',
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    sourcemap: false
+  }
 })
