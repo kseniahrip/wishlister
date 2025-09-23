@@ -1,6 +1,6 @@
 import type { User, RegisterData, LoginData, Wish } from '@/types/auth';
 
-const API_BASE = 'http://localhost:3001';
+const API_BASE = 'https://kseniahrip.github.io/wishlister/api';
 
 class ApiService {
   private async request(endpoint: string, options: RequestInit = {}) {
