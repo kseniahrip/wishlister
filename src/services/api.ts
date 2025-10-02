@@ -69,6 +69,28 @@ class ApiService {
   return createdWish;
 }
 
+  async updateWish(wishId: string, wishData: Partial<Wish>): Promise<Wish> {
+    // Сначала получаем текущее желание
+    const currentWish = await this.request(`/wishes/${wishId}`);
+    
+    // Обновляем только переданные поля
+    const updatedWish = {
+      ...currentWish,
+      ...wishData,
+      id: wishId // убеждаемся, что ID не меняется
+    };
+
+    const result = await this.request(`/wishes/${wishId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updatedWish),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    return result;
+  }
+
 async deleteWish(wishId: string): Promise<void> {
   await this.request(`/wishes/${wishId}`, {
     method: 'DELETE',

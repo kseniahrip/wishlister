@@ -25,4 +25,6 @@ export interface Wish {
   createdAt: string;
   likes?: number;
   tags?: string[];
+  reservedBy: string | null;
+
 }

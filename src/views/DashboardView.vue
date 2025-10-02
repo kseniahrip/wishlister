@@ -14,7 +14,7 @@
           {{ isSidebarCollapsed ? '→' : '←' }}
         </button>
       </div>
-
+      
       <nav class="sidebar-nav">
         <div class="nav-section">
           <h3 v-if="!isSidebarCollapsed" class="nav-title">Мой вишлист</h3>
@@ -80,7 +80,7 @@
         <button 
           v-if="activeTab === 'my-wishes'"
           class="add-wish-btn" 
-          @click="showAddWishModal = true"
+          @click="openAddWishModal"
         >
           <span class="btn-icon">➕</span>
           Добавить желание
@@ -138,19 +138,47 @@
             <div 
               v-for="wish in filteredWishes" 
               :key="wish.id" 
-              :class="['wish-card', viewMode]"
+              :class="['wish-card', viewMode, { 'reserved': wish.reservedBy && wish.userId !== authStore.user?.id }]"
             >
               <div class="wish-image-container">
                 <img :src="wish.image" :alt="wish.title" class="wish-image">
                 <div class="wish-actions">
-                  <button 
-                    v-if="wish.userId === authStore.user?.id"
-                    class="delete-btn"
-                    @click="confirmDeleteWish(wish)"
-                    title="Удалить желание"
+                  <!-- Бейдж зарезервированного желания (виден только другим пользователям) -->
+                  <div 
+                    v-if="wish.reservedBy && wish.userId !== authStore.user?.id" 
+                    class="reserved-badge"
+                    title="Это желание уже зарезервировано другим пользователем"
                   >
-                    🗑️
+                    🎁 Забронировано
+                  </div>
+                  
+                  <!-- Кнопка резерва (только для чужих желаний) -->
+                  <button 
+                    v-if="wish.userId !== authStore.user?.id && !wish.reservedBy"
+                    class="reserve-btn"
+                    @click="reserveWish(wish)"
+                    title="Забронировать этот подарок"
+                  >
+                    🎁 Забронировать
                   </button>
+                  
+                  <!-- Кнопки редактирования и удаления (только для своих желаний) -->
+                  <template v-if="wish.userId === authStore.user?.id">
+                    <button 
+                      class="edit-btn"
+                      @click="openEditWishModal(wish)"
+                      title="Редактировать желание"
+                    >
+                      ✏️
+                    </button>
+                    <button 
+                      class="delete-btn"
+                      @click="confirmDeleteWish(wish)"
+                      title="Удалить желание"
+                    >
+                      🗑️
+                    </button>
+                  </template>
                 </div>
               </div>
               
@@ -162,6 +190,16 @@
                   <span v-for="tag in wish.tags" :key="tag" class="tag">{{ tag }}</span>
                 </div>
                 
+                <!-- Информация о резерве (видна только владельцу) -->
+                <div 
+                  v-if="wish.reservedBy && wish.userId === authStore.user?.id" 
+                  class="reserve-info"
+                >
+                  <div class="reserve-notice">
+                    🎁 Кто-то собирается подарить вам это!
+                  </div>
+                </div>
+                
                 <div class="wish-footer">
                   <a 
                     v-if="wish.link" 
@@ -171,6 +209,10 @@
                   >
                     🔗 Перейти
                   </a>
+                  <div class="wish-meta">
+                    <span class="wish-date">{{ formatDate(wish.createdAt) }}</span>
+                    <span class="wish-author">{{ getUsername(wish.userId) }}</span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -184,7 +226,7 @@
               <button 
                 v-if="activeTab === 'my-wishes'" 
                 class="empty-btn" 
-                @click="showAddWishModal = true"
+                @click="openAddWishModal"
               >
                 Добавить желание
               </button>
@@ -194,24 +236,24 @@
       </div>
     </main>
 
-    <!-- Модальное окно добавления желания -->
-    <div v-if="showAddWishModal" class="modal-overlay" @click.self="showAddWishModal = false">
+    <!-- Модальное окно добавления/редактирования желания -->
+    <div v-if="showWishModal" class="modal-overlay" @click.self="closeWishModal">
       <div class="modal">
         <div class="modal-header">
-          <h2>Добавить новое желание</h2>
-          <button class="modal-close" @click="showAddWishModal = false">×</button>
+          <h2>{{ isEditing ? 'Редактировать желание' : 'Добавить новое желание' }}</h2>
+          <button class="modal-close" @click="closeWishModal">×</button>
         </div>
         
         <div class="modal-body">
           <div class="form-group">
             <label>Название желания *</label>
-            <input v-model="newWish.title" type="text" placeholder="Например, кружка эээ" required>
+            <input v-model="currentWish.title" type="text" placeholder="Например, кружка эээ" required>
           </div>
           
           <div class="form-group">
             <label>Описание</label>
             <textarea 
-              v-model="newWish.description" 
+              v-model="currentWish.description" 
               placeholder="Расскажите подробнее о вашем желании..."
               rows="3"
             ></textarea>
@@ -219,19 +261,24 @@
           
           <div class="form-group">
             <label>Ссылка на товар (необязательно)</label>
-            <input v-model="newWish.link" type="url" placeholder="https://example.com">
+            <input v-model="currentWish.link" type="url" placeholder="https://example.com">
           </div>
 
           <div class="form-group">
             <label>Ссылка на фото (необязательно)</label>
-            <input v-model="newWish.image" type="url" placeholder="https://example.com">
+            <input v-model="currentWish.image" type="url" placeholder="https://example.com">
           </div>
+
         </div>
         
         <div class="modal-footer">
-          <button class="btn-secondary" @click="showAddWishModal = false">Отмена</button>
-          <button class="btn-primary" @click="addNewWish" :disabled="!newWish.title.trim()">
-            Добавить
+          <button class="btn-secondary" @click="closeWishModal">Отмена</button>
+          <button 
+            class="btn-primary" 
+            @click="isEditing ? updateWish() : addNewWish()" 
+            :disabled="!currentWish.title.trim()"
+          >
+            {{ isEditing ? 'Сохранить' : 'Добавить' }}
           </button>
         </div>
       </div>
@@ -256,6 +303,26 @@
         </div>
       </div>
     </div>
+
+    <!-- Модальное окно подтверждения резерва -->
+    <div v-if="showReserveConfirm" class="modal-overlay" @click.self="showReserveConfirm = false">
+      <div class="modal confirm-modal">
+        <div class="modal-header">
+          <h2>Бронирование подарка</h2>
+          <button class="modal-close" @click="showReserveConfirm = false">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <p>Вы собираетесь забронировать подарок "<strong>{{ wishToReserve?.title }}</strong>"?</p>
+          <p class="info-text">Другие пользователи увидят, что этот подарок уже забронирован, но автор желания не узнает, кто именно его забронировал.</p>
+        </div>
+        
+        <div class="modal-footer">
+          <button class="btn-secondary" @click="showReserveConfirm = false">Отмена</button>
+          <button class="btn-primary" @click="confirmReserveWish">Забронировать</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -272,18 +339,25 @@ const isSidebarOpenMobile = ref(false);
 const isMobile = ref(false);
 const activeTab = ref('my-wishes');
 const viewMode = ref('grid');
-const showAddWishModal = ref(false);
+const showWishModal = ref(false);
 const showDeleteConfirm = ref(false);
-const wishToDelete = ref<any>(null);
+const showReserveConfirm = ref(false);
+const isEditing = ref(false);
 
 // Данные
 const wishes = ref<any[]>([]);
 const otherUsers = ref<any[]>([]);
-const newWish = ref({
+const wishToDelete = ref<any>(null);
+const wishToReserve = ref<any>(null);
+
+// Текущее редактируемое/добавляемое желание
+const currentWish = ref({
+  id: '',
   title: '',
   description: '',
   link: '',
-  image: ''
+  image: '',
+  tagsInput: ''
 });
 
 // Проверка мобильного устройства
@@ -322,12 +396,6 @@ const filteredWishes = computed(() => {
 
 const myWishesCount = computed(() => {
   return wishes.value.filter(wish => wish.userId === authStore.user?.id).length;
-});
-
-const myTotalLikes = computed(() => {
-  return wishes.value
-    .filter(wish => wish.userId === authStore.user?.id)
-    .reduce((sum, wish) => sum + (wish.likes || 0), 0);
 });
 
 const otherUsersWishesCount = computed(() => {
@@ -385,6 +453,123 @@ const getUsername = (userId: string) => {
   return user ? user.username : 'Неизвестный';
 };
 
+// Методы для работы с желаниями
+const openAddWishModal = () => {
+  isEditing.value = false;
+  currentWish.value = {
+    id: '',
+    title: '',
+    description: '',
+    link: '',
+    image: '',
+    tagsInput: ''
+  };
+  showWishModal.value = true;
+};
+
+const openEditWishModal = (wish: any) => {
+  isEditing.value = true;
+  currentWish.value = {
+    id: wish.id,
+    title: wish.title,
+    description: wish.description || '',
+    link: wish.link || '',
+    image: wish.image || '',
+    tagsInput: Array.isArray(wish.tags) ? wish.tags.join(', ') : ''
+  };
+  showWishModal.value = true;
+};
+
+const closeWishModal = () => {
+  showWishModal.value = false;
+  isEditing.value = false;
+};
+
+const addNewWish = async () => {
+  if (!currentWish.value.title.trim()) return;
+
+  try {
+    const wishData = {
+      title: currentWish.value.title,
+      description: currentWish.value.description,
+      link: currentWish.value.link,
+      image: currentWish.value.image,
+      tags: currentWish.value.tagsInput 
+        ? currentWish.value.tagsInput.split(',').map((tag: string) => tag.trim()).filter(Boolean)
+        : [],
+      userId: authStore.user?.id || '',
+      createdAt: new Date().toISOString(),
+      reservedBy: null
+    };
+
+    const createdWish = await apiService.createWish(wishData);
+    wishes.value.unshift(createdWish);
+    closeWishModal();
+    
+    window.dispatchEvent(new CustomEvent('show-notification', {
+      detail: {
+        message: 'Желание успешно добавлено!',
+        type: 'success',
+        duration: 3000
+      }
+    }));
+    
+  } catch (error: any) {
+    console.error('Ошибка при добавлении желания:', error);
+    window.dispatchEvent(new CustomEvent('show-notification', {
+      detail: {
+        message: error.message || 'Ошибка при добавлении желания',
+        type: 'error',
+        duration: 4000
+      }
+    }));
+  }
+};
+
+const updateWish = async () => {
+  if (!currentWish.value.title.trim()) return;
+
+  try {
+    const wishData = {
+      title: currentWish.value.title,
+      description: currentWish.value.description,
+      link: currentWish.value.link,
+      image: currentWish.value.image,
+      tags: currentWish.value.tagsInput 
+        ? currentWish.value.tagsInput.split(',').map((tag: string) => tag.trim()).filter(Boolean)
+        : []
+    };
+
+    const updatedWish = await apiService.updateWish(currentWish.value.id, wishData);
+    
+    // Обновляем локальный массив
+    const index = wishes.value.findIndex(w => w.id === currentWish.value.id);
+    if (index !== -1) {
+      wishes.value[index] = { ...wishes.value[index], ...updatedWish };
+    }
+    
+    closeWishModal();
+    
+    window.dispatchEvent(new CustomEvent('show-notification', {
+      detail: {
+        message: 'Желание успешно обновлено!',
+        type: 'success',
+        duration: 3000
+      }
+    }));
+    
+  } catch (error: any) {
+    console.error('Ошибка при обновлении желания:', error);
+    window.dispatchEvent(new CustomEvent('show-notification', {
+      detail: {
+        message: error.message || 'Ошибка при обновлении желания',
+        type: 'error',
+        duration: 4000
+      }
+    }));
+  }
+};
+
 const confirmDeleteWish = (wish: any) => {
   wishToDelete.value = wish;
   showDeleteConfirm.value = true;
@@ -394,17 +579,11 @@ const deleteWish = async () => {
   if (!wishToDelete.value) return;
 
   try {
-    // Удаляем с сервера
     await apiService.deleteWish(wishToDelete.value.id);
-    
-    // Удаляем локально
     wishes.value = wishes.value.filter(w => w.id !== wishToDelete.value.id);
-    
-    // Закрываем модальное окно
     showDeleteConfirm.value = false;
     wishToDelete.value = null;
     
-    // Уведомление об успехе
     window.dispatchEvent(new CustomEvent('show-notification', {
       detail: {
         message: 'Желание успешно удалено',
@@ -415,7 +594,6 @@ const deleteWish = async () => {
     
   } catch (error: any) {
     console.error('Ошибка при удалении желания:', error);
-    
     window.dispatchEvent(new CustomEvent('show-notification', {
       detail: {
         message: error.message || 'Ошибка при удалении желания',
@@ -426,49 +604,44 @@ const deleteWish = async () => {
   }
 };
 
-const addNewWish = async () => {
-  if (!newWish.value.title.trim()) return;
+const reserveWish = (wish: any) => {
+  wishToReserve.value = wish;
+  showReserveConfirm.value = true;
+};
+
+const confirmReserveWish = async () => {
+  if (!wishToReserve.value) return;
 
   try {
-    // Создаем объект желания без id (он сгенерируется в API)
-    const wishData = {
-      title: newWish.value.title,
-      description: newWish.value.description,
-      link: newWish.value.link,
-      image: newWish.value.image,
-      userId: authStore.user?.id || '', // добавляем проверку на undefined
-      createdAt: new Date().toISOString()
+    const reserveData = {
+      reservedBy: authStore.user?.id,
+      reservedAt: new Date().toISOString()
     };
 
-    // Отправляем на сервер
-    const createdWish = await apiService.createWish(wishData);
+    const updatedWish = await apiService.updateWish(wishToReserve.value.id, reserveData);
     
-    // Добавляем в локальный массив
-    wishes.value.unshift(createdWish);
-    showAddWishModal.value = false;
+    // Обновляем локальный массив
+    const index = wishes.value.findIndex(w => w.id === wishToReserve.value.id);
+    if (index !== -1) {
+      wishes.value[index] = { ...wishes.value[index], ...updatedWish };
+    }
     
-    // Показываем уведомление об успехе
+    showReserveConfirm.value = false;
+    wishToReserve.value = null;
+    
     window.dispatchEvent(new CustomEvent('show-notification', {
       detail: {
-        message: 'Желание успешно добавлено!',
+        message: 'Подарок успешно забронирован!',
         type: 'success',
         duration: 3000
       }
     }));
     
-    // Сброс формы
-    newWish.value = {
-      title: '',
-      description: '',
-      link: '',
-      image: ''
-    };
-    
   } catch (error: any) {
-    console.error('Ошибка при добавлении желания:', error);
+    console.error('Ошибка при бронировании подарка:', error);
     window.dispatchEvent(new CustomEvent('show-notification', {
       detail: {
-        message: error.message || 'Ошибка при добавлении желания',
+        message: error.message || 'Ошибка при бронировании подарка',
         type: 'error',
         duration: 4000
       }
@@ -1299,6 +1472,130 @@ const addNewWish = async () => {
   .add-wish-btn {
     width: 100%;
     justify-content: center;
+  }
+}
+
+.reserved-badge {
+  background: rgba(34, 197, 94, 0.9);
+  color: white;
+  padding: 0.5rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+}
+
+/* Кнопка бронирования */
+.reserve-btn {
+  background: rgba(59, 130, 246, 0.9);
+  color: white;
+  border: none;
+  border-radius: 20px;
+  padding: 0.5rem 1rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.reserve-btn:hover {
+  background: rgba(37, 99, 235, 0.9);
+  transform: scale(1.05);
+}
+
+/* Кнопка редактирования */
+.edit-btn {
+  background: rgba(234, 179, 8, 0.9);
+  border: none;
+  border-radius: 50%;
+  width: 36px;
+  height: 36px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(10px);
+}
+
+.edit-btn:hover {
+  background: rgba(202, 138, 4, 0.9);
+  transform: scale(1.1);
+}
+
+/* Стили для зарезервированных карточек */
+.wish-card.reserved {
+  opacity: 0.7;
+  position: relative;
+}
+
+.wish-card.reserved::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.05);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* Информация о резерве для владельца */
+.reserve-info {
+  margin: 1rem 0;
+  padding: 0.75rem;
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 8px;
+}
+
+.reserve-notice {
+  color: #16a34a;
+  font-weight: 600;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* Группировка кнопок действий */
+.wish-actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: flex-end;
+}
+
+/* Информационный текст в модалках */
+.info-text {
+  color: #3b82f6;
+  font-size: 0.9rem;
+  margin: 0.5rem 0 0 0;
+}
+
+/* Адаптивность для мобильных */
+@media (max-width: 768px) {
+  .wish-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  
+  .reserved-badge,
+  .reserve-btn {
+    font-size: 0.7rem;
+    padding: 0.4rem 0.6rem;
+  }
+  
+  .edit-btn,
+  .delete-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
   }
 }
 
