@@ -188,18 +188,7 @@
                 
                 <div class="wish-tags">
                   <span v-for="tag in wish.tags" :key="tag" class="tag">{{ tag }}</span>
-                </div>
-                
-                <!-- Информация о резерве (видна только владельцу) -->
-                <div 
-                  v-if="wish.reservedBy && wish.userId === authStore.user?.id" 
-                  class="reserve-info"
-                >
-                  <div class="reserve-notice">
-                    🎁 Кто-то собирается подарить вам это!
-                  </div>
-                </div>
-                
+                </div>                
                 <div class="wish-footer">
                   <a 
                     v-if="wish.link" 
@@ -209,10 +198,6 @@
                   >
                     🔗 Перейти
                   </a>
-                  <div class="wish-meta">
-                    <span class="wish-date">{{ formatDate(wish.createdAt) }}</span>
-                    <span class="wish-author">{{ getUsername(wish.userId) }}</span>
-                  </div>
                 </div>
               </div>
             </div>
